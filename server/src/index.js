@@ -22,14 +22,34 @@ const app = express();
 const server = http.createServer(app);
 
 // ======================================================
+// CORS CONFIGURATION
+// ======================================================
+
+const allowedOrigins = [
+  "https://project-meeting-omega.vercel.app",
+  "https://project-meeting-p191btoc4-nikhil-8034.vercel.app",
+  "http://localhost:5173",
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+};
+
+// ======================================================
 // SOCKET.IO
 // ======================================================
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    ...corsOptions,
     methods: ["GET", "POST"],
-    credentials: true,
   },
 });
 
@@ -41,12 +61,7 @@ const io = new Server(server, {
 // MIDDLEWARE
 // ======================================================
 
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true,
-  }),
-);
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
@@ -94,7 +109,9 @@ app.get("/api/health", (_, res) => {
 // ======================================================
 
 function createToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
 }
 
 // ======================================================
@@ -674,10 +691,6 @@ io.on("connection", (socket) => {
   // STANDALONE MEETINGS
   // ====================================================
 
-  // ----------------------------------------------------
-  // JOIN MEETING
-  // ----------------------------------------------------
-
   socket.on("meeting:join", ({ meetingCode, user }) => {
     if (!meetingCode) return;
 
@@ -699,24 +712,18 @@ io.on("connection", (socket) => {
 
     socket.join(`meeting:${code}`);
 
-    // Existing participants -> new user
     for (const existing of meeting.participants.values()) {
       if (existing.socketId !== socket.id) {
         socket.emit("meeting:peer-ready", existing);
       }
     }
 
-    // New user -> existing users
     socket.to(`meeting:${code}`).emit("meeting:peer-ready", participant);
 
     io.to(`meeting:${code}`).emit("meeting:participants", [
       ...meeting.participants.values(),
     ]);
   });
-
-  // ----------------------------------------------------
-  // MEETING READY
-  // ----------------------------------------------------
 
   socket.on("meeting:ready", () => {
     const code = socket.meetingCode;
@@ -733,10 +740,6 @@ io.on("connection", (socket) => {
 
     socket.to(`meeting:${code}`).emit("meeting:peer-ready", participant);
   });
-
-  // ----------------------------------------------------
-  // MEETING LEAVE
-  // ----------------------------------------------------
 
   socket.on("meeting:leave", () => {
     const code = socket.meetingCode;
@@ -766,10 +769,6 @@ io.on("connection", (socket) => {
     socket.meetingCode = null;
   });
 
-  // ----------------------------------------------------
-  // MEETING OFFER
-  // ----------------------------------------------------
-
   socket.on("meeting:offer", ({ targetSocketId, offer, from }) => {
     if (!targetSocketId || !offer) return;
 
@@ -783,10 +782,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ----------------------------------------------------
-  // MEETING ANSWER
-  // ----------------------------------------------------
-
   socket.on("meeting:answer", ({ targetSocketId, answer }) => {
     if (!targetSocketId || !answer) return;
 
@@ -795,10 +790,6 @@ io.on("connection", (socket) => {
       answer,
     });
   });
-
-  // ----------------------------------------------------
-  // MEETING ICE CANDIDATE
-  // ----------------------------------------------------
 
   socket.on("meeting:ice-candidate", ({ targetSocketId, candidate }) => {
     if (!targetSocketId || !candidate) return;
@@ -815,10 +806,6 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
-
-    // -----------------------------------------------
-    // WATCH PARTY CLEANUP
-    // -----------------------------------------------
 
     const code = socket.roomCode;
 
@@ -853,10 +840,6 @@ io.on("connection", (socket) => {
         ]);
       }
     }
-
-    // -----------------------------------------------
-    // STANDALONE MEETING CLEANUP
-    // -----------------------------------------------
 
     const meetingCode = socket.meetingCode;
 
@@ -897,6 +880,7 @@ const startServer = async () => {
     });
   } catch (error) {
     console.error("Database connection failed:", error.message);
+
     process.exit(1);
   }
 };
