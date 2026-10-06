@@ -7,7 +7,7 @@ export default function MeetingEnded() {
         <h1>Meeting ended</h1>
         <p>Your watch party has ended. Thanks for watching together.</p>
         <Link className="primary-btn full" to="/dashboard">
-          Back to dashboard
+          Back to dashboard.
         </Link>
       </div>
     </main>
