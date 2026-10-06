@@ -37,8 +37,6 @@ const io = new Server(server, {
 // CONNECT DATABASE
 // ======================================================
 
-connectDB();
-
 // ======================================================
 // MIDDLEWARE
 // ======================================================
@@ -461,7 +459,6 @@ io.on("connection", (socket) => {
     socket.roomCode = roomCode;
     socket.user = room.participants.get(socket.id);
 
-
     io.to(roomCode).emit("room:state", {
       room: {
         code: room.code,
@@ -702,7 +699,6 @@ io.on("connection", (socket) => {
 
     socket.join(`meeting:${code}`);
 
-
     // Existing participants -> new user
     for (const existing of meeting.participants.values()) {
       if (existing.socketId !== socket.id) {
@@ -892,6 +888,17 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    server.listen(PORT, () => {
+      console.log(`Server running on ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Database connection failed:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
