@@ -24,10 +24,10 @@ const server = http.createServer(app);
 // ======================================================
 // CORS CONFIGURATION
 // ======================================================
-
 const allowedOrigins = [
   "https://project-meeting-omega.vercel.app",
-  "https://project-meeting-p191btoc4-nikhil-8034.vercel.app",
+  "https://project-meeting-fl7oxrcjo-nikhil-8034.vercel.app",
+  "https://project-meeting-git-main-nikhil-8034.vercel.app",
   "http://localhost:5173",
 ];
 
