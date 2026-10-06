@@ -1,8 +1,15 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD
+    ? "https://project-meeting.onrender.com/api"
+    : "http://localhost:5000/api");
 
 export async function apiRequest(path, options = {}) {
   const token = localStorage.getItem("watch_token");
-  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
 
   if (token) headers.Authorization = `Bearer ${token}`;
 
