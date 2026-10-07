@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
+import { apiRequest } from "../services/api";
 
 export default function RoomHistory() {
   const [rooms, setRooms] = useState([]);
@@ -18,21 +19,21 @@ export default function RoomHistory() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/rooms", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // Use API helper instead of localhost
+      const data = await apiRequest("/rooms");
 
-      const data = await response.json();
+      // Backend may return an array directly
+      // or { rooms: [...] }
+      const roomList = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.rooms)
+          ? data.rooms
+          : [];
 
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch rooms");
-      }
-
-      setRooms(data);
+      setRooms(roomList);
     } catch (error) {
       console.error("History error:", error);
+      setRooms([]);
     } finally {
       setLoading(false);
     }

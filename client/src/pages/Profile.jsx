@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
+import { apiRequest } from "../services/api";
 
 export default function Profile() {
   const { user } = useAuth();
@@ -36,28 +37,23 @@ export default function Profile() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/auth/profile", {
+      // Use API helper instead of localhost
+      const data = await apiRequest("/auth/profile", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           name: name.trim(),
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to update profile");
+      if (!data?.user) {
+        throw new Error(data?.message || "Failed to update profile");
       }
 
       // Update user information stored in browser
       localStorage.setItem("watch_user", JSON.stringify(data.user));
 
       // Update displayed name immediately
-      setName(data.user.name);
+      setName(data.user.name || name.trim());
 
       setEditing(false);
 
@@ -76,7 +72,6 @@ export default function Profile() {
 
       <main className="min-h-screen bg-[#6d6b6b] py-12 px-4 text-black">
         <div className="max-w-3xl mx-auto">
-          {/* Page Heading */}
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-black">My Profile</h1>
 
@@ -85,24 +80,19 @@ export default function Profile() {
             </p>
           </div>
 
-          {/* Profile Card */}
           <div className="bg-[#aba9a7] border border-gray-300 rounded-lg shadow-sm">
-            {/* Card Header */}
             <div className="border-b border-gray-200 px-6 py-4">
               <h2 className="text-xl font-semibold text-black">
                 Profile Information
               </h2>
             </div>
 
-            {/* Profile Content */}
             <div className="p-6">
               <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-                {/* Avatar */}
                 <div className="h-24 w-24 rounded-full bg-black text-white flex items-center justify-center text-3xl font-bold border-4 border-red-600">
                   {initial}
                 </div>
 
-                {/* Basic Info */}
                 <div>
                   <h2 className="text-2xl font-bold text-black">{name}</h2>
 
@@ -114,10 +104,8 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* Divider */}
               <div className="border-t border-gray-200 my-7"></div>
 
-              {/* Details */}
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -150,7 +138,6 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* Buttons */}
               <div className="flex gap-3 mt-7">
                 <button
                   onClick={() => setEditing(true)}
@@ -166,7 +153,6 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Account Settings */}
           <div className="bg-white border border-gray-300 rounded-lg shadow-sm mt-6">
             <div className="border-b border-gray-200 px-6 py-4">
               <h2 className="text-xl font-semibold text-black">
@@ -226,7 +212,6 @@ export default function Profile() {
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Name */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Full Name
@@ -240,7 +225,6 @@ export default function Profile() {
                   />
                 </div>
 
-                {/* Email - currently read only */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Email Address
@@ -254,7 +238,6 @@ export default function Profile() {
                   />
                 </div>
 
-                {/* Buttons */}
                 <div className="flex justify-end gap-3 pt-3">
                   <button
                     onClick={() => setEditing(false)}

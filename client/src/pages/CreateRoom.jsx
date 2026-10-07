@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { apiRequest } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { makeRoomCode, getYouTubeId } from "../utils/helpers";
 
@@ -176,14 +177,9 @@ export default function CreateRoom() {
         return alert("Please login first");
       }
 
-      const response = await fetch("http://localhost:5000/api/rooms", {
+      // Production + Local API
+      const data = await apiRequest("/rooms", {
         method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-
         body: JSON.stringify({
           roomCode: code,
           name: roomName.trim(),
@@ -191,32 +187,28 @@ export default function CreateRoom() {
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return alert(data.message || "Failed to create room");
+      if (!data?.room) {
+        return alert(data?.message || "Failed to create room");
       }
 
-      // ==========================================
-      // NEW ROOM SETUP
-      // Save the newly created room + NEW VIDEO
-      // ==========================================
+      // Save newly created room
       const setup = {
         code: data.room.roomCode,
         name: data.room.name,
         video: data.room.videoId,
       };
 
-      // IMPORTANT:
-      // Replace old room_setup with the NEW meeting
       localStorage.setItem("room_setup", JSON.stringify(setup));
 
-      // Keep created screen working
+      // Show created screen
       setCreated(setup);
     } catch (error) {
       console.error("Create room error:", error);
 
-      alert("Server error. Please make sure the backend server is running.");
+      alert(
+        error.message ||
+          "Server error. Please make sure the backend server is running.",
+      );
     }
   }
 
