@@ -1,5 +1,10 @@
 ```jsx
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import socket, { connectSocket } from "../services/socket";
 
 const RoomContext = createContext(null);
@@ -20,18 +25,20 @@ export function RoomProvider({ children }) {
 
   useEffect(() => {
     function handleConnect() {
-      setConnected(true);
       console.log("Socket connected:", socket.id);
+      setConnected(true);
     }
 
     function handleDisconnect() {
-      setConnected(false);
       console.log("Socket disconnected");
+      setConnected(false);
     }
 
     function handleRoomState(data) {
-      setRoom(data.room);
+      setRoom(data.room || null);
       setParticipants(data.participants || []);
+      setMessages(data.messages || []);
+
       setPlayback(
         data.playback || {
           playing: false,
@@ -39,7 +46,7 @@ export function RoomProvider({ children }) {
           videoId: "",
         }
       );
-      setMessages(data.messages || []);
+
       setCallActive(Boolean(data.callActive));
     }
 
@@ -101,12 +108,18 @@ export function RoomProvider({ children }) {
     );
 
     const join = () => {
+      console.log("Joining room:", roomCode);
+
       socket.emit("room:join", {
         roomCode,
         roomName:
-          setup?.code === roomCode ? setup.name : undefined,
+          setup?.code === roomCode
+            ? setup.name
+            : undefined,
         videoId:
-          setup?.code === roomCode ? setup.video : undefined,
+          setup?.code === roomCode
+            ? setup.video
+            : undefined,
       });
     };
 
