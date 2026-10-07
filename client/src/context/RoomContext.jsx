@@ -1,13 +1,6 @@
-```jsx
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import socket, { connectSocket } from "../services/socket";
-import { useRoom } from "../context/RoomContext";
-
+import React from "react";
 const RoomContext = createContext(null);
 
 export function RoomProvider({ children }) {
@@ -15,158 +8,55 @@ export function RoomProvider({ children }) {
   const [messages, setMessages] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [connected, setConnected] = useState(false);
-
-  const [playback, setPlayback] = useState({
-    playing: false,
-    currentTime: 0,
-    videoId: "",
-  });
-
+  const [playback, setPlayback] = useState({ playing: false, currentTime: 0, videoId: "" });
   const [callActive, setCallActive] = useState(false);
 
   useEffect(() => {
-    function handleConnect() {
-      console.log("Socket connected:", socket.id);
-      setConnected(true);
-    }
-
-    function handleDisconnect() {
-      console.log("Socket disconnected");
-      setConnected(false);
-    }
-
-    function handleRoomState(data) {
-      setRoom(data.room || null);
+    socket.on("connect", () => setConnected(true));
+    socket.on("disconnect", () => setConnected(false));
+    socket.on("room:state", data => {
+      setRoom(data.room);
       setParticipants(data.participants || []);
+      setPlayback(data.playback || { playing:false, currentTime:0, videoId:"" });
       setMessages(data.messages || []);
-
-      setPlayback(
-        data.playback || {
-          playing: false,
-          currentTime: 0,
-          videoId: "",
-        }
-      );
-
       setCallActive(Boolean(data.callActive));
-    }
-
-    function handleParticipantsUpdate(data) {
-      setParticipants(data || []);
-    }
-
-    function handleNewMessage(message) {
-      setMessages((prev) => [...prev, message]);
-    }
-
-    function handlePlaybackUpdate(data) {
-      setPlayback((prev) => ({
-        ...prev,
-        ...data,
-      }));
-    }
-
-    function handleCallStarted() {
-      setCallActive(true);
-    }
-
-    function handleCallStopped() {
-      setCallActive(false);
-    }
-
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-
-    socket.on("room:state", handleRoomState);
-    socket.on("participants:update", handleParticipantsUpdate);
-    socket.on("chat:new", handleNewMessage);
-    socket.on("playback:update", handlePlaybackUpdate);
-
-    socket.on("call:started", handleCallStarted);
-    socket.on("call:stopped", handleCallStopped);
-
-    if (socket.connected) {
-      setConnected(true);
-    }
+    });
+    socket.on("participants:update", setParticipants);
+    socket.on("chat:new", message => setMessages(prev => [...prev, message]));
+    socket.on("playback:update", setPlayback);
+    socket.on("call:started", () => setCallActive(true));
+    socket.on("call:stopped", () => setCallActive(false));
 
     return () => {
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
-
-      socket.off("room:state", handleRoomState);
-      socket.off("participants:update", handleParticipantsUpdate);
-      socket.off("chat:new", handleNewMessage);
-      socket.off("playback:update", handlePlaybackUpdate);
-
-      socket.off("call:started", handleCallStarted);
-      socket.off("call:stopped", handleCallStopped);
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("room:state");
+      socket.off("participants:update");
+      socket.off("chat:new");
+      socket.off("playback:update");
+      socket.off("call:started");
+      socket.off("call:stopped");
     };
   }, []);
 
   function joinRoom(roomCode, user) {
-    const setup = JSON.parse(
-      localStorage.getItem("room_setup") || "null"
-    );
-
-    const join = () => {
-      console.log("Joining room:", roomCode);
-
-      socket.emit("room:join", {
-        roomCode,
-        roomName:
-          setup?.code === roomCode
-            ? setup.name
-            : undefined,
-        videoId:
-          setup?.code === roomCode
-            ? setup.video
-            : undefined,
-      });
-    };
-
-    if (socket.connected) {
-      join();
-    } else {
-      socket.once("connect", join);
-      connectSocket();
-    }
+    if (!socket.connected) connectSocket();
+    const setup = JSON.parse(localStorage.getItem("room_setup") || "null");
+    socket.emit("room:join", { roomCode, roomName: setup?.code === roomCode ? setup.name : undefined, videoId: setup?.code === roomCode ? setup.video : undefined });
   }
 
   function leaveRoom() {
-    if (socket.connected) {
-      socket.emit("room:leave");
-    }
-
+    socket.emit("room:leave");
     setRoom(null);
     setParticipants([]);
     setMessages([]);
-
-    setPlayback({
-      playing: false,
-      currentTime: 0,
-      videoId: "",
-    });
-
-    setCallActive(false);
   }
 
   return (
-    <RoomContext.Provider
-      value={{
-        socket,
-        room,
-        setRoom,
-        messages,
-        participants,
-        connected,
-        playback,
-        setPlayback,
-        callActive,
-        setCallActive,
-        joinRoom,
-        leaveRoom,
-      }}
-    >
+    <RoomContext.Provider value={{
+      socket, room, setRoom, messages, participants, connected,
+      playback, setPlayback, callActive, setCallActive, joinRoom, leaveRoom
+    }}>
       {children}
     </RoomContext.Provider>
   );
@@ -175,4 +65,3 @@ export function RoomProvider({ children }) {
 export function useRoom() {
   return useContext(RoomContext);
 }
-```;
