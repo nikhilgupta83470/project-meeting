@@ -38,13 +38,19 @@ export default function WatchRoom() {
 
   const me = useMemo(
     () =>
-      participants.find((p) => p.id === user?.id) || {
+      participants.find(
+        (p) =>
+          p.id === user?.id || p.id === user?._id || p.email === user?.email,
+      ) || {
         ...user,
+        id: user?.id || user?._id,
         role: "Participant",
       },
     [participants, user],
   );
-
+ console.log("USER:", user);
+ console.log("PARTICIPANTS:", participants);
+ console.log("ME:", me);
   const inviteUrl = `${window.location.origin}/room/${code}?call=1`;
 
   useEffect(() => {
