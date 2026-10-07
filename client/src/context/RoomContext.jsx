@@ -1,4 +1,4 @@
-```jsx
+
 import { createContext, useContext, useEffect, useState } from "react";
 import socket, { connectSocket } from "../services/socket";
 import React from "react";
@@ -133,4 +133,3 @@ export function RoomProvider({ children }) {
 export function useRoom() {
   return useContext(RoomContext);
 }
-```;
