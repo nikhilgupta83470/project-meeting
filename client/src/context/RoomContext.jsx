@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import socket, { connectSocket } from "../services/socket";
+import { useRoom } from "../context/RoomContext";
 
 const RoomContext = createContext(null);
 
