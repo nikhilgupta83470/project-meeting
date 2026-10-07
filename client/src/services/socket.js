@@ -12,7 +12,6 @@ const socket = io(SOCKET_URL, {
 
 export function connectSocket() {
   const token = localStorage.getItem("watch_token");
-
   socket.auth = { token };
   socket.connect();
 }
