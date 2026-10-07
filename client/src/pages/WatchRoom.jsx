@@ -48,9 +48,9 @@ export default function WatchRoom() {
       },
     [participants, user],
   );
- console.log("USER:", user);
- console.log("PARTICIPANTS:", participants);
- console.log("ME:", me);
+  console.log("USER:", user);
+  console.log("PARTICIPANTS:", participants);
+  console.log("ME:", me);
   const inviteUrl = `${window.location.origin}/room/${code}?call=1`;
 
   useEffect(() => {
@@ -62,6 +62,19 @@ export default function WatchRoom() {
 
     return () => leaveRoom();
   }, [code]);
+  useEffect(() => {
+    function handleRemoved() {
+      alert("You have been removed from the room.");
+      leaveRoom();
+      nav("/dashboard");
+    }
+
+    socket.on("participant:removed", handleRemoved);
+
+    return () => {
+      socket.off("participant:removed", handleRemoved);
+    };
+  }, [socket, nav, leaveRoom]);
 
   useEffect(() => {
     if (callActive && searchParams.get("call") === "1") {
@@ -130,6 +143,13 @@ export default function WatchRoom() {
   function sendChat(text) {
     socket.emit("chat:send", {
       text,
+    });
+  }
+  function removeParticipant(participant) {
+    if (me.role !== "Host") return;
+
+    socket.emit("participant:remove", {
+      participantId: participant.id,
     });
   }
 
@@ -239,7 +259,11 @@ export default function WatchRoom() {
         </section>
 
         <aside className="sidebar">
-          <Participants participants={participants} currentUser={me} />
+          <Participants
+            participants={participants}
+            currentUser={me}
+            onAction={removeParticipant}
+          />
 
           <Chat messages={messages} onSend={sendChat} />
         </aside>

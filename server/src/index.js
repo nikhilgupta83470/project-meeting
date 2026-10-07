@@ -5,6 +5,7 @@ import http from "http";
 import cors from "cors";
 import { Server } from "socket.io";
 import { randomUUID } from "crypto";
+import Meeting from "./models/Meeting.js";
 
 // Database
 import connectDB from "./config/database.js";
@@ -305,6 +306,54 @@ app.get("/api/rooms", requireAuth, async (req, res) => {
 
     res.status(500).json({
       message: "Failed to fetch rooms",
+      error: error.message,
+    });
+  }
+});
+//  CREATE MEETING
+
+app.post("/api/meetings", requireAuth, async (req, res) => {
+  try {
+    const { meetingCode, name } = req.body;
+
+    if (!meetingCode) {
+      return res.status(400).json({
+        message: "Meeting code is required",
+      });
+    }
+
+    const existingMeeting = await Meeting.findOne({
+      meetingCode: meetingCode.toUpperCase(),
+    });
+
+    if (existingMeeting) {
+      return res.status(409).json({
+        message: "Meeting code already exists",
+      });
+    }
+
+    const meeting = await Meeting.create({
+      meetingCode: meetingCode.toUpperCase(),
+      name: name?.trim() || "My Meeting",
+      host: req.user._id,
+      participants: [
+        {
+          user: req.user._id,
+          name: req.user.name,
+        },
+      ],
+      isActive: true,
+    });
+
+    res.status(201).json({
+      message: "Meeting created successfully",
+      meeting,
+    });
+  } catch (error) {
+    console.error("Create meeting error:", error);
+
+    res.status(500).json({
+      message: "Failed to create meeting",
       error: error.message,
     });
   }
@@ -685,6 +734,40 @@ io.on("connection", (socket) => {
 
     socket.roomCode = null;
     socket.user = null;
+  });
+  socket.on("participant:remove", ({ participantId }) => {
+    const room = rooms.get(socket.roomCode);
+
+    if (!room) return;
+
+    const host = room.participants.get(socket.id);
+
+    // Only host can remove a participant
+    if (!host || host.role !== "Host") {
+      return;
+    }
+
+    for (const [socketId, participant] of room.participants.entries()) {
+      if (participant.id === participantId) {
+        const targetSocket = io.sockets.sockets.get(socketId);
+
+        if (targetSocket) {
+          targetSocket.emit("participant:removed");
+
+          targetSocket.leave(socket.roomCode);
+          targetSocket.roomCode = null;
+        }
+
+        room.participants.delete(socketId);
+
+        io.to(socket.roomCode).emit(
+          "participants:update",
+          Array.from(room.participants.values()),
+        );
+
+        break;
+      }
+    }
   });
 
   // ====================================================

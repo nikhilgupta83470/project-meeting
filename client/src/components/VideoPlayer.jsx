@@ -6,7 +6,7 @@ import React, {
 } from "react";
 
 const VideoPlayer = forwardRef(function VideoPlayer(
-  { videoId, playing, currentTime },
+  { videoId, playing, currentTime, onEnded },
   ref,
 ) {
   const playerRef = useRef(null);
@@ -95,6 +95,24 @@ const VideoPlayer = forwardRef(function VideoPlayer(
             console.log("YouTube player ready:", videoId);
           },
 
+          onStateChange: (event) => {
+            /*
+             * YouTube PlayerState:
+             * 0 = ENDED
+             */
+            if (
+              window.YT &&
+              window.YT.PlayerState &&
+              event.data === window.YT.PlayerState.ENDED
+            ) {
+              console.log("VIDEO ENDED");
+
+              if (onEnded) {
+                onEnded();
+              }
+            }
+          },
+
           onError: (event) => {
             console.error("YouTube error:", event.data);
           },
@@ -131,7 +149,7 @@ const VideoPlayer = forwardRef(function VideoPlayer(
 
       document.body.appendChild(script);
     }
-  }, [videoId]);
+  }, [videoId, onEnded]);
 
   /*
    * Playback synchronization

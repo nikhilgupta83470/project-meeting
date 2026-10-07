@@ -15,6 +15,59 @@ body {
     "Segoe UI",
     sans-serif;
 }
+
+.menu-btn {
+  display: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+  }
+
+  .menu-btn {
+    display: block;
+  }
+
+  .navbar nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
+    z-index: 9999;
+  }
+
+  .navbar nav.nav-open {
+    display: flex;
+  }
+
+  .navbar nav a,
+  .navbar nav button {
+    width: 100%;
+  }
+}
+
+@media (min-width: 769px) {
+  .navbar nav {
+    display: flex;
+  }
+
+  .menu-btn {
+    display: none;
+  }
+}
 a {
   text-decoration: none;
   color: inherit;
