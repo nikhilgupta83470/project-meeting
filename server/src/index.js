@@ -9,7 +9,7 @@ import Meeting from "./models/Meeting.js";
 
 // Database
 import connectDB from "./config/database.js";
-
+import { Resend } from "resend";
 // MongoDB Models
 import User from "./models/User.js";
 import Room from "./models/Room.js";
@@ -17,7 +17,7 @@ import Message from "./models/Message.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+// import nodemailer from "nodemailer";
 import { requireAuth } from "./middleware/auth.js";
 
 const app = express();
@@ -124,22 +124,7 @@ function createToken(userId) {
 // EMAIL CONFIGURATION
 // ======================================================
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-
-  family: 4,
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD,
-  },
-
-  tls: {
-    rejectUnauthorized: false,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ======================================================
 // GOOGLE LOGIN
@@ -170,22 +155,19 @@ app.get("/api/auth/google/callback", async (req, res) => {
       );
     }
 
-    const tokenResponse = await fetch(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          code,
-          client_id: process.env.GOOGLE_CLIENT_ID,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET,
-          redirect_uri: `${process.env.SERVER_URL}/api/auth/google/callback`,
-          grant_type: "authorization_code",
-        }),
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    );
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: `${process.env.SERVER_URL}/api/auth/google/callback`,
+        grant_type: "authorization_code",
+      }),
+    });
 
     const tokenData = await tokenResponse.json();
 
@@ -250,9 +232,7 @@ app.get("/api/auth/github", (req, res) => {
     scope: "read:user user:email",
   });
 
-  res.redirect(
-    `https://github.com/login/oauth/authorize?${params.toString()}`,
-  );
+  res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
 });
 
 app.get("/api/auth/github/callback", async (req, res) => {
@@ -299,21 +279,16 @@ app.get("/api/auth/github/callback", async (req, res) => {
     let email = githubUser.email;
 
     if (!email) {
-      const emailsResponse = await fetch(
-        "https://api.github.com/user/emails",
-        {
-          headers: {
-            Authorization: `Bearer ${tokenData.access_token}`,
-            Accept: "application/vnd.github+json",
-          },
+      const emailsResponse = await fetch("https://api.github.com/user/emails", {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+          Accept: "application/vnd.github+json",
         },
-      );
+      });
 
       const emails = await emailsResponse.json();
 
-      const primaryEmail = emails.find(
-        (item) => item.primary && item.verified,
-      );
+      const primaryEmail = emails.find((item) => item.primary && item.verified);
 
       email = primaryEmail?.email;
     }
@@ -356,7 +331,6 @@ app.get("/api/auth/github/callback", async (req, res) => {
 // ======================================================
 // FORGOT PASSWORD - SEND VERIFICATION CODE
 // ======================================================
-
 app.post("/api/auth/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
@@ -386,32 +360,55 @@ app.post("/api/auth/forgot-password", async (req, res) => {
 
     await user.save();
 
-    await transporter.sendMail({
-      from: `"WatchParty" <${process.env.EMAIL_USER}>`,
-      to: normalizedEmail,
+    const { data, error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: [normalizedEmail],
       subject: "WatchParty Password Reset Code",
+
       html: `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:30px">
+        <div style="
+          font-family: Arial, sans-serif;
+          max-width: 600px;
+          margin: auto;
+          padding: 30px;
+        ">
+
           <h2>WatchParty Password Reset</h2>
+
           <p>Your password reset verification code is:</p>
 
           <div style="
-            font-size:32px;
-            font-weight:bold;
-            letter-spacing:8px;
-            padding:20px;
-            background:#f4f4f4;
-            text-align:center;
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            padding: 20px;
+            background: #f4f4f4;
+            text-align: center;
           ">
             ${code}
           </div>
 
-          <p>This code will expire in <b>10 minutes</b>.</p>
+          <p>
+            This code will expire in <b>10 minutes</b>.
+          </p>
 
-          <p>If you did not request this code, you can safely ignore this email.</p>
+          <p>
+            If you did not request this code, you can safely ignore this email.
+          </p>
+
         </div>
       `,
     });
+
+    if (error) {
+      console.error("RESEND ERROR:", error);
+
+      return res.status(500).json({
+        message: error.message || "Could not send verification code",
+      });
+    }
+
+    console.log("PASSWORD RESET EMAIL SENT:", data?.id);
 
     res.json({
       message: "Verification code sent to your email",
