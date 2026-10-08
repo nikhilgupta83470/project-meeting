@@ -8,6 +8,8 @@ import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import CreateRoom from "./pages/CreateRoom";
 import JoinRoom from "./pages/JoinRoom";
+import ForgotPassword from "./pages/ForgotPassword";
+import OAuthSuccess from "./pages/OAuthSuccess";
 import WaitingRoom from "./pages/WaitingRoom";
 import WatchRoom from "./pages/WatchRoom";
 import RoomSettings from "./pages/RoomSettings";
@@ -38,6 +40,8 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/oauth-success" element={<OAuthSuccess />} />
           <Route path="/meetings" element={<Meetings />} />
           <Route path="/meeting/:code" element={<MeetingRoom />} />
           <Route

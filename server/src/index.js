@@ -14,13 +14,19 @@ import connectDB from "./config/database.js";
 import User from "./models/User.js";
 import Room from "./models/Room.js";
 import Message from "./models/Message.js";
-
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
 import { requireAuth } from "./middleware/auth.js";
 
 const app = express();
 const server = http.createServer(app);
+console.log("EMAIL_USER:", process.env.EMAIL_USER);
+console.log(
+  "EMAIL_APP_PASSWORD length:",
+  process.env.EMAIL_APP_PASSWORD?.length,
+);
 
 // ======================================================
 // CORS CONFIGURATION
@@ -114,6 +120,362 @@ function createToken(userId) {
     expiresIn: "7d",
   });
 }
+// ======================================================
+// EMAIL CONFIGURATION
+// ======================================================
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_APP_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
+
+// ======================================================
+// GOOGLE LOGIN
+// ======================================================
+
+app.get("/api/auth/google", (req, res) => {
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    redirect_uri: `${process.env.SERVER_URL}/api/auth/google/callback`,
+    response_type: "code",
+    scope: "openid email profile",
+    access_type: "offline",
+    prompt: "select_account",
+  });
+
+  res.redirect(
+    `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+  );
+});
+
+app.get("/api/auth/google/callback", async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      return res.redirect(
+        `${process.env.CLIENT_URL}/login?error=Google%20login%20failed`,
+      );
+    }
+
+    const tokenResponse = await fetch(
+      "https://oauth2.googleapis.com/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: `${process.env.SERVER_URL}/api/auth/google/callback`,
+          grant_type: "authorization_code",
+        }),
+      },
+    );
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      throw new Error("Google access token not received");
+    }
+
+    const profileResponse = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+      },
+    );
+
+    const profile = await profileResponse.json();
+
+    if (!profile.email) {
+      throw new Error("Google email not received");
+    }
+
+    const email = profile.email.toLowerCase();
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        name: profile.name || "Google User",
+        email,
+        avatar: profile.picture || "",
+        googleId: profile.id,
+      });
+    } else {
+      user.googleId = profile.id;
+      user.avatar = profile.picture || user.avatar;
+      await user.save();
+    }
+
+    const token = createToken(user._id.toString());
+
+    res.redirect(
+      `${process.env.CLIENT_URL}/oauth-success?token=${encodeURIComponent(token)}`,
+    );
+  } catch (error) {
+    console.error("Google login error:", error);
+
+    res.redirect(
+      `${process.env.CLIENT_URL}/login?error=Google%20login%20failed`,
+    );
+  }
+});
+
+// ======================================================
+// GITHUB LOGIN
+// ======================================================
+
+app.get("/api/auth/github", (req, res) => {
+  const params = new URLSearchParams({
+    client_id: process.env.GITHUB_CLIENT_ID,
+    redirect_uri: `${process.env.SERVER_URL}/api/auth/github/callback`,
+    scope: "read:user user:email",
+  });
+
+  res.redirect(
+    `https://github.com/login/oauth/authorize?${params.toString()}`,
+  );
+});
+
+app.get("/api/auth/github/callback", async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      return res.redirect(
+        `${process.env.CLIENT_URL}/login?error=GitHub%20login%20failed`,
+      );
+    }
+
+    const tokenResponse = await fetch(
+      "https://github.com/login/oauth/access_token",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_id: process.env.GITHUB_CLIENT_ID,
+          client_secret: process.env.GITHUB_CLIENT_SECRET,
+          code,
+        }),
+      },
+    );
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      throw new Error("GitHub access token not received");
+    }
+
+    const githubResponse = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    const githubUser = await githubResponse.json();
+
+    let email = githubUser.email;
+
+    if (!email) {
+      const emailsResponse = await fetch(
+        "https://api.github.com/user/emails",
+        {
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            Accept: "application/vnd.github+json",
+          },
+        },
+      );
+
+      const emails = await emailsResponse.json();
+
+      const primaryEmail = emails.find(
+        (item) => item.primary && item.verified,
+      );
+
+      email = primaryEmail?.email;
+    }
+
+    if (!email) {
+      throw new Error("GitHub email not available");
+    }
+
+    email = email.toLowerCase();
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        name: githubUser.name || githubUser.login || "GitHub User",
+        email,
+        avatar: githubUser.avatar_url || "",
+        githubId: String(githubUser.id),
+      });
+    } else {
+      user.githubId = String(githubUser.id);
+      user.avatar = githubUser.avatar_url || user.avatar;
+      await user.save();
+    }
+
+    const token = createToken(user._id.toString());
+
+    res.redirect(
+      `${process.env.CLIENT_URL}/oauth-success?token=${encodeURIComponent(token)}`,
+    );
+  } catch (error) {
+    console.error("GitHub login error:", error);
+
+    res.redirect(
+      `${process.env.CLIENT_URL}/login?error=GitHub%20login%20failed`,
+    );
+  }
+});
+
+// ======================================================
+// FORGOT PASSWORD - SEND VERIFICATION CODE
+// ======================================================
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email?.trim()) {
+      return res.status(400).json({
+        message: "Email is required",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "No account found with this email",
+      });
+    }
+
+    const code = crypto.randomInt(100000, 1000000).toString();
+
+    user.resetCode = code;
+    user.resetCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    await user.save();
+
+    await transporter.sendMail({
+      from: `"WatchParty" <${process.env.EMAIL_USER}>`,
+      to: normalizedEmail,
+      subject: "WatchParty Password Reset Code",
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:30px">
+          <h2>WatchParty Password Reset</h2>
+          <p>Your password reset verification code is:</p>
+
+          <div style="
+            font-size:32px;
+            font-weight:bold;
+            letter-spacing:8px;
+            padding:20px;
+            background:#f4f4f4;
+            text-align:center;
+          ">
+            ${code}
+          </div>
+
+          <p>This code will expire in <b>10 minutes</b>.</p>
+
+          <p>If you did not request this code, you can safely ignore this email.</p>
+        </div>
+      `,
+    });
+
+    res.json({
+      message: "Verification code sent to your email",
+    });
+  } catch (error) {
+    console.error("FORGOT PASSWORD ERROR:", error);
+
+    res.status(500).json({
+      message: error.message || "Could not send verification code",
+    });
+  }
+});
+
+// ======================================================
+// RESET PASSWORD
+// ======================================================
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        message: "Email, verification code and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters",
+      });
+    }
+
+    const user = await User.findOne({
+      email: email.trim().toLowerCase(),
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (
+      user.resetCode !== code ||
+      !user.resetCodeExpires ||
+      user.resetCodeExpires < new Date()
+    ) {
+      return res.status(400).json({
+        message: "Invalid or expired verification code",
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.resetCode = null;
+    user.resetCodeExpires = null;
+
+    await user.save();
+
+    res.json({
+      message: "Password reset successfully",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+
+    res.status(500).json({
+      message: "Password reset failed",
+    });
+  }
+});
 
 // ======================================================
 // SIGNUP

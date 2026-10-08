@@ -30,6 +30,21 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    githubId: {
+      type: String,
+      default: null,
+    },
+
+    resetCode: {
+      type: String,
+      default: null,
+    },
+
+    resetCodeExpires: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
